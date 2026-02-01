@@ -17,8 +17,8 @@ CC := gcc
 CFLAGS := -MMD -MP
 LDFLAGS := -lm
 
-run: build
-	./$(TARGET)
+run: build $(FAT12_BIN)
+	./$(TARGET) $(FAT12_BIN)
 build: $(TARGET)
 
 create_loop_device: $(FAT12_BIN)
