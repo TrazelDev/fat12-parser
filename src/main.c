@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "biosParameterBlock.h"
 
+#include "fat12.h"
 
 int main(int argc, char** argv) {
 	if (argc != 2) {
@@ -11,11 +11,11 @@ int main(int argc, char** argv) {
 	}
 
 	char* loopDevicePath = argv[1];
-	BPB* bpb = malloc(sizeof(BPB));
+	FAT12Header* fat12Header = malloc(sizeof(FAT12Header));
 
-	if (!load_bpb(bpb, loopDevicePath)) {
-		free(bpb);
+	if (!load_fat12Header(fat12Header, loopDevicePath)) {
+		free(fat12Header);
 		exit(-1);
 	}
-	print_bpb(bpb);
+	print_fat12Header(fat12Header);
 }

@@ -1,0 +1,37 @@
+#pragma once
+#include <stdint.h>
+
+typedef struct FAT12Header {
+	// BPB:
+	uint8_t bootjmp[3];
+	uint8_t oem_name[8];
+	uint16_t bytes_per_sector;
+	uint8_t sectors_per_cluster;
+	uint16_t reserved_sector_count;
+	uint8_t table_count;
+	uint16_t root_entry_count;
+	uint16_t total_sectors_16;
+	uint8_t media_type;
+	uint16_t table_size_16;
+	uint16_t sectors_per_track;
+	uint16_t head_side_count;
+	uint32_t hidden_sector_count;
+	uint32_t total_sectors_32;
+
+	// fat12/fat16 specifics:
+	uint8_t bios_drive_num;
+	uint8_t reserved1;
+	uint8_t boot_signature;
+	uint32_t volume_id;
+	uint8_t volume_label[11];
+	uint8_t fat_type_label[8];
+} __attribute__((packed)) FAT12Header;
+
+/** @brief gets an allocated fat12 header and loads the correct data
+ * for it from the loop device
+ * @return NULL - failed to extract the data, fat12Header - in the case of success
+ */
+FAT12Header* load_fat12Header(FAT12Header* fat12Header, const char* loopDevicePath);
+
+// I let AI genrate this function:
+void print_fat12Header(const FAT12Header* fat12Header);

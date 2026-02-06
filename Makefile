@@ -25,11 +25,6 @@ create_loop_device: $(FAT12_BIN)
 clean:
 	rm -rf $(BINS_DIR)/
 
-# depend:
-# 	$(CC) -MM $(SRCS) > $(DEPS)
-# 	# fixing multipe dirs in DEPS
-# 	@sed -i -E "s/^(.+?).o: ([^ ]+?)\1/\2\1.o: \2\1/g" $(DEPS)
-
 $(TARGET): $(OBJS) $(HEADERS)
 	$(CC) -o $@ $(OBJS)
 
