@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -11,12 +12,17 @@ FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePat
 	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
 	if (fat12FileDescriptor == -1) {
 		perror("Error opening loop device file");
-		return NULL;
+		exit(-1);
 	}
 
 	char buffer[sizeof(FAT12Header)];
-	read(fat12FileDescriptor, buffer, sizeof(FAT12Header));
+	if (read(fat12FileDescriptor, buffer, sizeof(FAT12Header)) == -1) {
+		perror("File failed to be read");
+		exit(-1);
+	}
 	memcpy(fat12Header, buffer, sizeof(FAT12Header));
+
+	close(fat12FileDescriptor);
 	return fat12Header;
 }
 
@@ -29,6 +35,7 @@ FAT12Info* loadFat12Info(FAT12Header* fat12Header, FAT12Info* fat12Info) {
 	} else {
 		info->totalSectors = fat12Header->totalSectors32;
 	}
+	info->bytesPerSector = fat12Header->bytesPerSector;
 	info->fatSectorSize = fat12Header->tableSize16;
 	info->fatSectionSectorSize = fat12Header->tableCount * info->fatSectorSize;
 	info->rootDirSectorsSize = bytesToSectorsRoundUp(rootDirBytes, fat12Header->bytesPerSector);
@@ -42,6 +49,83 @@ FAT12Info* loadFat12Info(FAT12Header* fat12Header, FAT12Info* fat12Info) {
 	info->rootDirSectorOffset = info->dataSectionSectorOffset - info->rootDirSectorsSize;
 
 	return info;
+}
+
+uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, int maxEntries,
+						   bool includeDeltedEntries) {
+	int count = 0;
+	for (int i = 0; i < maxEntries; i++) {
+		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;  // End of directory
+		if (includeDeltedEntries | ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY)) count++;
+	}
+	return count;
+}
+
+FAT12DirectoryEntry* getDirectoryEntries(uint32_t sectorOffset, uint32_t directorySectorSize,
+										 const char* loopDevicePath, FAT12Info* fat12Info) {
+	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
+	if (fat12FileDescriptor == -1) {
+		perror("Error opening loop device file");
+		exit(-1);
+	}
+
+	uint32_t directoryBytesSize = directorySectorSize * fat12Info->bytesPerSector;
+	uint32_t bytesOffset = sectorOffset * fat12Info->bytesPerSector;
+	FAT12DirectoryEntry* dirEntries = xmalloc(directoryBytesSize);
+
+	if (pread(fat12FileDescriptor, dirEntries, directoryBytesSize, bytesOffset) <
+		directoryBytesSize) {
+		perror("File failed to be read");
+		exit(-1);
+	}
+
+	uint32_t maxEntries = directoryBytesSize / sizeof(FAT12DirectoryEntry);
+	uint32_t entriesCount = countValidEntries(dirEntries, maxEntries, true);
+	dirEntries = xrealloc(dirEntries, (entriesCount + 1) * sizeof(FAT12DirectoryEntry));
+
+	close(fat12FileDescriptor);
+	return dirEntries;
+}
+
+char** getEntriesFileNames(FAT12DirectoryEntry* dirEntries, uint32_t maxEntries) {
+	int count = 0;
+	for (uint32_t i = 0; i < maxEntries; i++) {
+		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;
+		if ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY) continue;
+		if (dirEntries[i].attributes & 0x08) continue;	// skipping volume labels
+		count++;
+	}
+
+	char** fileNames = xmalloc((count + 1) * sizeof(char*));
+	int nameIndex = 0;
+	for (uint32_t i = 0; i < maxEntries; i++) {
+		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;
+		if ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY) continue;
+		if (dirEntries[i].attributes & 0x08) continue;	// skipping volume labels
+
+		fileNames[nameIndex] = xmalloc(sizeof(dirEntries[i].fileName) + 2);
+		memcpy(fileNames[nameIndex], dirEntries[i].fileName, 8);
+		fileNames[nameIndex][8] = '.';
+		memcpy(fileNames[nameIndex] + 9, dirEntries[i].fileName + 8, 3);
+		fileNames[nameIndex][12] = '\0';
+
+		nameIndex++;
+	}
+
+	fileNames[nameIndex] = NULL;
+	return fileNames;
+}
+
+char** getRootFileNames(FAT12Info* fat12Info, const char* loopDevice) {
+	FAT12DirectoryEntry* dirEntries = getDirectoryEntries(
+		fat12Info->rootDirSectorOffset, fat12Info->rootDirSectorsSize, loopDevice, fat12Info);
+
+	uint32_t rootDirBytesSize = fat12Info->rootDirSectorsSize * fat12Info->bytesPerSector;
+	uint32_t maxEntries = rootDirBytesSize / sizeof(FAT12DirectoryEntry);
+	char** fileNames = getEntriesFileNames(dirEntries, maxEntries);
+
+	free(dirEntries);
+	return fileNames;
 }
 
 void printFat12Header(const FAT12Header* fat12Header) {

@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef struct FAT12Header {
@@ -27,6 +28,8 @@ typedef struct FAT12Header {
 	uint8_t fatTypeLabel[8];
 } __attribute__((packed)) FAT12Header;
 
+#define FINAL_ENTRY 0x00
+#define UNUSED_ENTRY 0xE5
 typedef struct FAT12DirectoryEntry {
 	char fileName[11];
 	uint8_t attributes;
@@ -43,6 +46,7 @@ typedef struct FAT12DirectoryEntry {
 } __attribute__((packed)) FAT12DirectoryEntry;
 
 typedef struct FAT12Info {
+	uint32_t bytesPerSector;
 	uint32_t totalSectors;
 	uint32_t fatSectorSize;
 	uint32_t fatSectionSectorSize;
@@ -59,16 +63,20 @@ typedef struct FAT12Info {
 /** @brief gets an allocated fat12 header and loads the correct data for it from the loop device
  * @param fat12Header - allocated FAT12Header which the FAT12Header information will be loaded into
  * @param loopDevice - path to the loop device
- * @return NULL - failed to extract the data, fat12Header - in the case of success
+ * @return fat12Header
  */
 FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePath);
 
 /** @brief loads fat12Info with all the correct values
  * @param fat12Header - loaded fat12Header with all the correct informatin
  * @param fat12Info - allocated FAT12Info which will be loaded the information of FAT12Info
- * @return NULL - failed to extract data, fat12Info in case of success
+ * @return fat12Info in case of success
  */
 FAT12Info* loadFat12Info(FAT12Header* fat12Header, FAT12Info* fat12Info);
+
+char** getRootFileNames(FAT12Info* fat12Info, const char* loopDevice);
+FAT12DirectoryEntry* getDirectoryEntries(uint32_t sectorOffset, uint32_t directorySectorSize,
+										 const char* loopDevicePath, FAT12Info* fat12Info);
 
 // I let AI genrate this functions:
 void printFat12Header(const FAT12Header* fat12Header);
