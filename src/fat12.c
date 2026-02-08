@@ -51,13 +51,28 @@ FAT12Info* loadFat12Info(FAT12Header* fat12Header, FAT12Info* fat12Info) {
 	return info;
 }
 
+static inline bool isFinalDirectoryEntry(FAT12DirectoryEntry* entry) {
+	return entry->fileName[0] == FINAL_ENTRY;
+}
+static inline bool isVolumeLabelEntry(FAT12DirectoryEntry* entry) {
+	return entry->attributes & 0x08;
+}
+static inline bool isDeletedEntry(FAT12DirectoryEntry* entry) {
+	return ((uint8_t)entry->fileName[0] == DELETED_ENTRY);
+}
 uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, int maxEntries,
-						   bool includeDeltedEntries) {
-	int count = 0;
-	for (int i = 0; i < maxEntries; i++) {
-		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;  // End of directory
-		if (includeDeltedEntries | ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY)) count++;
+						   bool includeNoneFileOrDirEntires) {
+	uint32_t count = 0;
+	for (uint32_t i = 0; i < maxEntries; i++) {
+		if (isFinalDirectoryEntry(&dirEntries[i])) break;  // End of the directory
+		if (includeNoneFileOrDirEntires) {
+			count++;
+			continue;
+		}
+		if (!isDeletedEntry(&dirEntries[i]) && !isVolumeLabelEntry(&dirEntries[i])) count++;
+		return count;
 	}
+
 	return count;
 }
 
@@ -88,27 +103,16 @@ FAT12DirectoryEntry* getDirectoryEntries(uint32_t sectorOffset, uint32_t directo
 }
 
 char** getEntriesFileNames(FAT12DirectoryEntry* dirEntries, uint32_t maxEntries) {
-	int count = 0;
-	for (uint32_t i = 0; i < maxEntries; i++) {
-		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;
-		if ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY) continue;
-		if (dirEntries[i].attributes & 0x08) continue;	// skipping volume labels
-		count++;
-	}
+	uint32_t count = countValidEntries(dirEntries, maxEntries, true);
 
 	char** fileNames = xmalloc((count + 1) * sizeof(char*));
 	int nameIndex = 0;
 	for (uint32_t i = 0; i < maxEntries; i++) {
-		if (dirEntries[i].fileName[0] == FINAL_ENTRY) break;
-		if ((uint8_t)dirEntries[i].fileName[0] == UNUSED_ENTRY) continue;
-		if (dirEntries[i].attributes & 0x08) continue;	// skipping volume labels
+		if (isFinalDirectoryEntry(&dirEntries[i])) break;
+		if (isDeletedEntry(&dirEntries[i])) continue;
+		if (isVolumeLabelEntry(&dirEntries[i])) continue;
 
-		fileNames[nameIndex] = xmalloc(sizeof(dirEntries[i].fileName) + 2);
-		memcpy(fileNames[nameIndex], dirEntries[i].fileName, 8);
-		fileNames[nameIndex][8] = '.';
-		memcpy(fileNames[nameIndex] + 9, dirEntries[i].fileName + 8, 3);
-		fileNames[nameIndex][12] = '\0';
-
+		fileNames[nameIndex] = fatFileNameToStr(dirEntries[i].fileName);
 		nameIndex++;
 	}
 

@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
 		free(fat12Header);
 		exit(-1);
 	}
-	printFat12Header(fat12Header);
+	// printFat12Header(fat12Header);
 
 	FAT12Info* fat12Info = xmalloc(sizeof(FAT12Info));
 	if (!loadFat12Info(fat12Header, fat12Info)) {
@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
 		free(fat12Header);
 		exit(-1);
 	}
-	printFat12Info(fat12Info);
+	// printFat12Info(fat12Info);
 
 	// TODO: refactor the function: getEntriesFileNames and also make it so the name will be
 	// displated correctly

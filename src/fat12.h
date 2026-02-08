@@ -29,7 +29,7 @@ typedef struct FAT12Header {
 } __attribute__((packed)) FAT12Header;
 
 #define FINAL_ENTRY 0x00
-#define UNUSED_ENTRY 0xE5
+#define DELETED_ENTRY 0xE5
 typedef struct FAT12DirectoryEntry {
 	char fileName[11];
 	uint8_t attributes;
