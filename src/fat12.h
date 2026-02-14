@@ -60,23 +60,41 @@ typedef struct FAT12Info {
 	uint32_t rootDirSectorOffset;
 } FAT12Info;
 
-/** @brief gets an allocated fat12 header and loads the correct data for it from the loop device
- * @param fat12Header - allocated FAT12Header which the FAT12Header information will be loaded into
- * @param loopDevice - path to the loop device
- * @return fat12Header
+/** Loads FAT12Header with information from a loop device.
+ * @param[out] fat12Header Pointer to the allocated structure to load information to.
+ * @param[in] loopDevicePath
+ * @return A pointer to fat12Header.
  */
 FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePath);
 
-/** @brief loads fat12Info with all the correct values
- * @param fat12Header - loaded fat12Header with all the correct informatin
- * @param fat12Info - allocated FAT12Info which will be loaded the information of FAT12Info
- * @return fat12Info in case of success
+/** Loads FAT12Info from FAT12Header.
+ * @param[out] fat12Info Pointer to the allocated structure to load information to.
+ * @param[in] fat12Header A FAT12Header structure with correct information of some loop device.
+ * @return A pointer fat12Info.
  */
-FAT12Info* loadFat12Info(FAT12Header* fat12Header, FAT12Info* fat12Info);
+FAT12Info* loadFat12Info(FAT12Info* fat12Info, FAT12Header* fat12Header);
 
-char** getRootFileNames(FAT12Info* fat12Info, const char* loopDevice);
-FAT12DirectoryEntry* getDirectoryEntries(uint32_t sectorOffset, uint32_t directorySectorSize,
-										 const char* loopDevicePath, FAT12Info* fat12Info);
+/** Gets the root folder file names in an array from the loopDevice using FAT12Info
+ * @param[out] names Address of char** variable. The function will allocate it.
+ * @note Caller will free each string in the array then the array itself.
+ * @param[in] fat12Info A FAT12Info that was created from the loopDevice.
+ * @param[in] loopDevicePath.
+ * @return The count of file names in names variable.
+ */
+uint32_t getRootFileNames(char*** names, FAT12Info* fat12Info, const char* loopDevicePath);
+
+/** Extracts fat12 directory entries of specific directory from the loopDevice provided.
+ * @param[out] dirs Pointer to an array of FAT12DirectoryEntry that will be allocated internally.
+ * @note Caller will free the array.
+ * @param[in] sectorOffset Starting sector number of directory that entries will be taken from.
+ * @param[in] directorySectorSize.
+ * @param[in] bytesPerSector bytes per sector for this specific fat12.
+ * @param[in] loopDevicePath
+ * @return Amount of directory entries in variable dirs.
+ */
+uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, uint32_t sectorOffset,
+							 uint32_t directorySectorSize, uint32_t bytesPerSector,
+							 const char* loopDevicePath);
 
 // I let AI genrate this functions:
 void printFat12Header(const FAT12Header* fat12Header);

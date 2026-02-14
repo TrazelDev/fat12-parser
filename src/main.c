@@ -17,20 +17,19 @@ int main(int argc, char** argv) {
 		free(fat12Header);
 		exit(-1);
 	}
-	// printFat12Header(fat12Header);
+	printFat12Header(fat12Header);
 
 	FAT12Info* fat12Info = xmalloc(sizeof(FAT12Info));
-	if (!loadFat12Info(fat12Header, fat12Info)) {
+	if (!loadFat12Info(fat12Info, fat12Header)) {
 		free(fat12Info);
 		free(fat12Header);
 		exit(-1);
 	}
-	// printFat12Info(fat12Info);
+	printFat12Info(fat12Info);
 
-	// TODO: refactor the function: getEntriesFileNames and also make it so the name will be
-	// displated correctly
-	char** ls = getRootFileNames(fat12Info, loopDevicePath);
-	for (int i = 0; ls[i] != NULL; i++) {
-		printf("%s\n", ls[i]);
+	char** fileNames = NULL;
+	uint32_t namesCount = getRootFileNames(&fileNames, fat12Info, loopDevicePath);
+	for (uint32_t i = 0; i < namesCount; i++) {
+		printf("%s\n", fileNames[i]);
 	}
 }
