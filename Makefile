@@ -1,3 +1,4 @@
+.PHONY: run debug build docs create_loop_device clean
 all: run
 
 SRCS_DIR := src
@@ -14,16 +15,22 @@ DEPS = $(OBJS:.o=.d)
 
 
 CC := gcc
-CFLAGS := -MMD -MP
+CFLAGS := -MMD -MP -Werror -Wall -Werror -g
 LDFLAGS := -lm
 
 run: build $(FAT12_BIN)
 	./$(TARGET) $(FAT12_BIN)
+debug: build $(FAT12_BIN)
+	gdb $(TARGET)
 build: $(TARGET)
-
-create_loop_device: $(FAT12_BIN)
+docs:
+	doxygen
+	@xdg-open html/index.html 2>/dev/null
 clean:
 	rm -rf $(BINS_DIR)/
+
+	
+create_loop_device: $(FAT12_BIN)
 
 $(TARGET): $(OBJS) $(HEADERS)
 	$(CC) -o $@ $(OBJS)
