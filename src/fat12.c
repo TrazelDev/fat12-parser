@@ -25,7 +25,8 @@ void preadDevice(uint8_t* buffer, uint64_t readBytes, int64_t offset, const char
 		exit(-1);
 	}
 	if (bytesRead < readBytes) {
-		fprintf(stderr, "pread: file short (%lu out of %lu bytes read)\n", bytesRead, readBytes);
+		(void)fprintf(stderr, "pread: file short (%lu out of %lu bytes read)\n", bytesRead,
+					  readBytes);
 		close(deviceFileDescriptor);
 		exit(-1);
 	}
@@ -222,6 +223,29 @@ void printFileAllocationTable(FAT12Info* fat12Info, const char* loopDevicePath) 
 		uint16_t pointerIndex = getNextClusterId(i, fat);
 
 		printf("%x -> %x\n", i, pointerIndex);
+	}
+}
+
+void printFat12Information(const char* loopDevicePath) {
+	FAT12Header* fat12Header = xmalloc(sizeof(FAT12Header));
+	if (!loadFat12Header(fat12Header, loopDevicePath)) {
+		free(fat12Header);
+		exit(-1);
+	}
+	printFat12Header(fat12Header);
+
+	FAT12Info* fat12Info = xmalloc(sizeof(FAT12Info));
+	if (!loadFat12Info(fat12Info, fat12Header)) {
+		free(fat12Info);
+		free(fat12Header);
+		exit(-1);
+	}
+	printFat12Info(fat12Info);
+
+	char** fileNames = NULL;
+	uint32_t namesCount = getRootFileNames(&fileNames, fat12Info, loopDevicePath);
+	for (uint32_t i = 0; i < namesCount; i++) {
+		printf("%d %s\n", i, fileNames[i]);
 	}
 }
 

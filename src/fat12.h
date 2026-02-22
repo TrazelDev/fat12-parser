@@ -211,6 +211,8 @@ static inline uint32_t bytesToSectorsRoundUp(uint32_t bytes, uint16_t bytesPerSe
 	return (bytes + bytesPerSector - 1) / bytesPerSector;
 }
 void printFileAllocationTable(FAT12Info* fat12Info, const char* loopDevicePath);
+/** Prints all kind of inromation about the fat12 device */
+void printFat12Information(const char* loopDevicePath);
 
 // I let AI generate this functions:
 // NOLINTBEGIN
