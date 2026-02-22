@@ -45,6 +45,8 @@ typedef struct FAT12DirectoryEntry {
 #define FINAL_ENTRY 0x00
 #define DELETED_ENTRY 0xE5
 #define VOLUME_LABEL_ATTRIBUTE 0x08
+#define FAT12_ATTR_DIRECTORY 0x10
+
 static inline bool isFinalDirectoryEntry(FAT12DirectoryEntry* entry) {
 	return entry->fileName[0] == FINAL_ENTRY;
 }
@@ -53,6 +55,9 @@ static inline bool isVolumeLabelEntry(FAT12DirectoryEntry* entry) {
 }
 static inline bool isDeletedEntry(FAT12DirectoryEntry* entry) {
 	return ((uint8_t)entry->fileName[0] == DELETED_ENTRY);
+}
+static inline bool isDirectoryEntryDirectory(const FAT12DirectoryEntry* entry) {
+	return (entry->attributes & FAT12_ATTR_DIRECTORY) != 0;
 }
 
 #define FAT_LAST_CLUSTER_NUM 0xFFF
@@ -71,6 +76,15 @@ typedef struct FAT12Info {
 	uint32_t fatSectionSectorOffset;
 	uint32_t rootDirSectorOffset;
 } FAT12Info;
+
+/** Reads bytes from a loopDevice from an offset and loads into a preallocated buffer.
+ * In case the function fails to read it exists out of the program.
+ * @param[in] buffer preallocated buffer the caller provides.
+ * @param[in] readBytes Number of bytes to read from loop device.
+ * @param[in] offset the offset to start reading from the device.
+ * @param[in] loopDevicePath Path to loop device that will be read
+ */
+void preadDevice(uint8_t* buffer, uint64_t readBytes, int64_t offset, const char* loopDevicePath);
 
 /** Loads FAT12Header with information from a loop device.
  * @param[out] fat12Header Pointer to the allocated structure to load information to.

@@ -11,21 +11,34 @@
 #include "fat12.h"
 #include "fat12_string.h"
 
-FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePath) {
-	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
-	if (fat12FileDescriptor == -1) {
+void preadDevice(uint8_t* buffer, uint64_t readBytes, int64_t offset, const char* loopDevicePath) {
+	int deviceFileDescriptor = open(loopDevicePath, O_RDONLY);
+	if (deviceFileDescriptor == -1) {
 		perror("Error opening loop device file");
 		exit(-1);
 	}
 
-	char buffer[sizeof(FAT12Header)];
-	if (read(fat12FileDescriptor, buffer, sizeof(FAT12Header)) == -1) {
+	ssize_t bytesRead = pread(deviceFileDescriptor, buffer, readBytes, offset);
+	if (bytesRead == -1) {
 		perror("File failed to be read");
+		close(deviceFileDescriptor);
 		exit(-1);
 	}
+	if (bytesRead < readBytes) {
+		fprintf(stderr, "pread: file short (%lu out of %lu bytes read)\n", bytesRead, readBytes);
+		close(deviceFileDescriptor);
+		exit(-1);
+	}
+
+	close(deviceFileDescriptor);
+}
+
+FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePath) {
+	static char buffer[sizeof(FAT12Header)];
+
+	preadDevice((uint8_t*)buffer, sizeof(FAT12Header), 0, loopDevicePath);
 	memcpy(fat12Header, buffer, sizeof(FAT12Header));
 
-	close(fat12FileDescriptor);
 	return fat12Header;
 }
 
@@ -77,27 +90,15 @@ uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, uint32_t maxEntries,
 uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, uint32_t sectorOffset,
 							 uint32_t directorySectorSize, uint32_t bytesPerSector,
 							 const char* loopDevicePath) {
-	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
-	if (fat12FileDescriptor == -1) {
-		perror("Error opening loop device file");
-		exit(-1);
-	}
+	const uint32_t DIRECTORY_BYTES_SIZE = directorySectorSize * bytesPerSector;
+	const uint32_t BYTES_OFFSET = sectorOffset * bytesPerSector;
+	FAT12DirectoryEntry* dirEntries = xmalloc(DIRECTORY_BYTES_SIZE);
+	preadDevice((uint8_t*)dirEntries, DIRECTORY_BYTES_SIZE, BYTES_OFFSET, loopDevicePath);
 
-	uint32_t directoryBytesSize = directorySectorSize * bytesPerSector;
-	uint32_t bytesOffset = sectorOffset * bytesPerSector;
-	FAT12DirectoryEntry* dirEntries = xmalloc(directoryBytesSize);
-
-	if (pread(fat12FileDescriptor, dirEntries, directoryBytesSize, bytesOffset) <
-		directoryBytesSize) {
-		perror("File failed to be read");
-		exit(-1);
-	}
-
-	uint32_t maxEntries = directoryBytesSize / sizeof(FAT12DirectoryEntry);
+	uint32_t maxEntries = DIRECTORY_BYTES_SIZE / sizeof(FAT12DirectoryEntry);
 	uint32_t entriesCount = countValidEntries(dirEntries, maxEntries, true);
 	dirEntries = xrealloc(dirEntries, entriesCount * sizeof(FAT12DirectoryEntry));
 
-	close(fat12FileDescriptor);
 	*dirs = dirEntries;
 	return entriesCount;
 }
@@ -188,25 +189,18 @@ uint32_t getFileContent(uint8_t** fileContent, FAT12DirectoryEntry* fileDirector
 		currClusterId = getNextClusterId(currClusterId, fat);
 	}
 
-	return BYTES_PER_CLUSTER * fileClusterCount;
+	if (isDirectoryEntryDirectory(fileDirectoryEntry)) {
+		return BYTES_PER_CLUSTER * fileClusterCount;
+	}
+	return fileDirectoryEntry->fileSizeInBytes;
 }
 
 uint8_t* getFat(FAT12Info* fat12Info, const char* loopDevicePath) {
 	const uint32_t FAT12_TABLE_SIZE = fat12Info->fatSectorSize * fat12Info->bytesPerSector;
-
-	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
-	if (fat12FileDescriptor == -1) {
-		perror("Error opening loop device file");
-		exit(-1);
-	}
+	const uint32_t FAT_BYTE_OFFSET = fat12Info->bytesPerSector * fat12Info->fatSectionSectorOffset;
 
 	uint8_t* fat = xmalloc(FAT12_TABLE_SIZE);
-	uint32_t fatByteOffset = fat12Info->bytesPerSector * fat12Info->fatSectionSectorOffset;
-	if (pread(fat12FileDescriptor, fat, FAT12_TABLE_SIZE, fatByteOffset) == -1) {
-		perror("File failed to be read");
-		exit(-1);
-	}
-	close(fat12FileDescriptor);
+	preadDevice(fat, FAT12_TABLE_SIZE, FAT_BYTE_OFFSET, loopDevicePath);
 
 	return fat;
 }
@@ -251,19 +245,9 @@ uint32_t readCluster(char** data, uint16_t clusterId, FAT12Info* fat12Info,
 	uint32_t dataSectionSectorOffset = clusterNum * fat12Info->sectorsPerCluster;
 	uint32_t deviceSectorOffset = fat12Info->dataSectionSectorOffset + dataSectionSectorOffset;
 	uint32_t deviceBytesOffset = deviceSectorOffset * fat12Info->bytesPerSector;
+
 	*data = xmalloc(bytesPerCluster);
-
-	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
-	if (fat12FileDescriptor == -1) {
-		perror("Error opening loop device file");
-		exit(-1);
-	}
-
-	if (pread(fat12FileDescriptor, *data, bytesPerCluster, deviceBytesOffset) == -1) {
-		perror("File failed to be read");
-		exit(-1);
-	}
-	close(fat12FileDescriptor);
+	preadDevice((uint8_t*)*data, bytesPerCluster, deviceBytesOffset, loopDevicePath);
 	return bytesPerCluster;
 }
 uint32_t getRootDirectoryEntries(FAT12DirectoryEntry** dirEntries, FAT12Info* fat12Info,
