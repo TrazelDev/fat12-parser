@@ -1,22 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "allocwrap.h"
 #include "fat12.h"
 
 void test(FAT12Info* fat12Info, const char* loopDevicePath) {
+	// printFileAllocationTable(fat12Info, loopDevicePath);
 	FAT12DirectoryEntry* dirEntries;
+	FAT12DirectoryEntry entry;
 	char* data;
 	uint32_t entriesCount;
 	entriesCount = getRootDirectoryEntries(&dirEntries, fat12Info, loopDevicePath);
+	memcpy(&entry, dirEntries, sizeof(FAT12DirectoryEntry));
 
-	for (uint32_t i = 0; i < entriesCount; i++) {
-		printf("name: %s\n", dirEntries[i].fileName);
-		printf("byte size: %d\n", dirEntries[i].fileSizeInBytes);
-		printFat12DirectoryEntry(dirEntries + i);
-		getFileContent((uint8_t**)&data, &dirEntries[i], fat12Info, loopDevicePath);
-		printf("%s\n", data);
-	}
+	entriesCount = getDirectoryEntries(&dirEntries, &entry, fat12Info, loopDevicePath);
+	entriesCount = filterValidDirectoryEntries(&dirEntries, entriesCount);
+	printFat12DirectoryEntry(dirEntries);
+	printFat12DirectoryEntry(dirEntries + 1);
+	printFat12DirectoryEntry(dirEntries + 2);
+
+	getFileContent((uint8_t**)&data, dirEntries + 2, fat12Info, loopDevicePath);
+	printf("%s", data);
 }
 
 int main(int argc, char** argv) {

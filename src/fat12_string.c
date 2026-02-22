@@ -14,6 +14,8 @@ char* fatFileNameToStr(char* filenameFatFormat) {
 	memcpy(name, filenameFatFormat, FILENAME_LENGTH);
 	if (filenameFatFormat[FILENAME_LENGTH] != ' ') {
 		name[FILENAME_LENGTH] = '.';
+	} else {
+		name[FILENAME_LENGTH] = ' ';
 	}
 	memcpy(name + FILENAME_LENGTH + 1, filenameFatFormat + FILENAME_LENGTH, EXTENSION_LENGTH);
 

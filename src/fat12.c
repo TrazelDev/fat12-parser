@@ -87,20 +87,10 @@ uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, uint32_t maxEntries,
 	return count;
 }
 
-uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, uint32_t sectorOffset,
-							 uint32_t directorySectorSize, uint32_t bytesPerSector,
-							 const char* loopDevicePath) {
-	const uint32_t DIRECTORY_BYTES_SIZE = directorySectorSize * bytesPerSector;
-	const uint32_t BYTES_OFFSET = sectorOffset * bytesPerSector;
-	FAT12DirectoryEntry* dirEntries = xmalloc(DIRECTORY_BYTES_SIZE);
-	preadDevice((uint8_t*)dirEntries, DIRECTORY_BYTES_SIZE, BYTES_OFFSET, loopDevicePath);
-
-	uint32_t maxEntries = DIRECTORY_BYTES_SIZE / sizeof(FAT12DirectoryEntry);
-	uint32_t entriesCount = countValidEntries(dirEntries, maxEntries, true);
-	dirEntries = xrealloc(dirEntries, entriesCount * sizeof(FAT12DirectoryEntry));
-
-	*dirs = dirEntries;
-	return entriesCount;
+uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, FAT12DirectoryEntry* dirEntry,
+							 FAT12Info* fat12Info, const char* loopDevice) {
+	uint64_t directorySize = getFileContent((uint8_t**)dirs, dirEntry, fat12Info, loopDevice);
+	return directorySize;
 }
 
 uint32_t getEntriesFileNames(char*** fileNames, FAT12DirectoryEntry* dirEntries,
@@ -131,9 +121,7 @@ uint32_t getEntriesFileNames(char*** fileNames, FAT12DirectoryEntry* dirEntries,
 
 uint32_t getRootFileNames(char*** names, FAT12Info* fat12Info, const char* loopDevicePath) {
 	FAT12DirectoryEntry* dirEntries;
-	uint32_t entriesCount = getDirectoryEntries(&dirEntries, fat12Info->rootDirSectorOffset,
-												fat12Info->rootDirSectorsSize,
-												fat12Info->bytesPerSector, loopDevicePath);
+	uint32_t entriesCount = getRootDirectoryEntries(&dirEntries, fat12Info, loopDevicePath);
 
 	uint32_t fileNamesCount = getEntriesFileNames(names, dirEntries, entriesCount);
 	free(dirEntries);
@@ -170,7 +158,6 @@ uint32_t filterValidDirectoryEntries(FAT12DirectoryEntry** dirEntries, uint32_t 
 
 uint32_t getFileContent(uint8_t** fileContent, FAT12DirectoryEntry* fileDirectoryEntry,
 						FAT12Info* fat12Info, const char* loopDevicePath) {
-	assert(fileDirectoryEntry->fileSizeInBytes != 0);
 	const uint32_t BYTES_PER_CLUSTER = fat12Info->bytesPerSector * fat12Info->sectorsPerCluster;
 
 	uint8_t* fat = getFat(fat12Info, loopDevicePath);
@@ -252,10 +239,13 @@ uint32_t readCluster(char** data, uint16_t clusterId, FAT12Info* fat12Info,
 }
 uint32_t getRootDirectoryEntries(FAT12DirectoryEntry** dirEntries, FAT12Info* fat12Info,
 								 const char* loopDevicePath) {
-	uint32_t entriesCount = getDirectoryEntries(dirEntries, fat12Info->rootDirSectorOffset,
-												fat12Info->rootDirSectorsSize,
-												fat12Info->bytesPerSector, loopDevicePath);
-	return filterValidDirectoryEntries(dirEntries, entriesCount);
+	const uint32_t DIRECTORY_BYTES_SIZE = fat12Info->rootDirSectorsSize * fat12Info->bytesPerSector;
+	const uint32_t BYTES_OFFSET = fat12Info->rootDirSectorOffset * fat12Info->bytesPerSector;
+	const uint32_t MAX_ENTRIES = DIRECTORY_BYTES_SIZE / sizeof(FAT12DirectoryEntry);
+
+	*dirEntries = xmalloc(DIRECTORY_BYTES_SIZE);
+	preadDevice((uint8_t*)*dirEntries, DIRECTORY_BYTES_SIZE, BYTES_OFFSET, loopDevicePath);
+	return filterValidDirectoryEntries(dirEntries, MAX_ENTRIES);
 }
 
 // NOLINTBEGIN

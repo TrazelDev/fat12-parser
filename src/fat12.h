@@ -117,16 +117,13 @@ uint32_t getRootFileNames(char*** names, FAT12Info* fat12Info, const char* loopD
  *
  * @param[out] dirs Pointer to an array of FAT12DirectoryEntry that will be allocated internally.
  * @note Caller will free the array.
- * @param[in] sectorOffset Starting sector number of directory that entries will be taken from.
- * @param[in] directorySectorSize.
- * @param[in] bytesPerSector bytes per sector for this specific fat12.
+ * @param[in] dirEntry The directory entry of that directory
  * @param[in] loopDevicePath
  *
  * @return Amount of directory entries in variable dirs.
  */
-uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, uint32_t sectorOffset,
-							 uint32_t directorySectorSize, uint32_t bytesPerSector,
-							 const char* loopDevicePath);
+uint32_t getDirectoryEntries(FAT12DirectoryEntry** dirs, FAT12DirectoryEntry* dirEntry,
+							 FAT12Info* fat12Info, const char* loopDevice);
 
 /** @brief Filters a FAT12 directory array and keeps only file and directory entries.
  *
@@ -150,6 +147,7 @@ uint32_t filterValidDirectoryEntries(FAT12DirectoryEntry** dirEntries, uint32_t 
  * This function reads the file described by fileDirectoryEntry from the FAT12 filesystem
  * described by fat12Info located at loopDevicePath. The file data is returned via fileContent
  * and the size of it as return value. The caller owns the returned buffer.
+ * @note Caller is responsible to verify file is not empty
  *
  * @param[out] fileContent On success, set to a newly allocated buffer containing the file's bytes.
  * @note The caller must free the buffer.
