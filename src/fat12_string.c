@@ -1,10 +1,9 @@
 #include <ctype.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "utils.h"
+#include "allocwrap.h"
+#include "fat12_string.h"
 
 char* fatFileNameToStr(char* filenameFatFormat) {
 	const uint32_t FILENAME_LENGTH = 8;
@@ -28,22 +27,4 @@ char* fatFileNameToStr(char* filenameFatFormat) {
 	}
 	name[j] = '\0';
 	return name;
-}
-
-void* xmalloc(uint64_t size) {
-	void* ret = malloc(size);
-	if (!ret) {
-		perror("");
-		exit(-1);
-	}
-	return ret;
-}
-
-void* xrealloc(void* ptr, uint64_t size) {
-	void* ret = realloc(ptr, size);
-	if (!ret) {
-		perror("");
-		exit(-1);
-	}
-	return ret;
 }

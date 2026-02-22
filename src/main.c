@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "allocwrap.h"
 #include "fat12.h"
-#include "utils.h"
 
 void test(FAT12Info* fat12Info, const char* loopDevicePath) {
 	FAT12DirectoryEntry* dirEntries;

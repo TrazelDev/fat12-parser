@@ -7,8 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "allocwrap.h"
 #include "fat12.h"
-#include "utils.h"
+#include "fat12_string.h"
 
 FAT12Header* loadFat12Header(FAT12Header* fat12Header, const char* loopDevicePath) {
 	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);

@@ -195,6 +195,9 @@ uint32_t countFileClusters(uint16_t initialClusterId, const uint8_t* fat);
 uint16_t getNextClusterId(uint16_t clusterId, const uint8_t* fat);
 /** Converts clusterId to cluster number since the first id is 2 which points to cluster 0 */
 static inline uint32_t clusterIdToClusterNum(uint16_t clusterId) { return clusterId - 2; }
+static inline uint32_t bytesToSectorsRoundUp(uint32_t bytes, uint16_t bytesPerSector) {
+	return (bytes + bytesPerSector - 1) / bytesPerSector;
+}
 void printFileAllocationTable(FAT12Info* fat12Info, const char* loopDevicePath);
 
 // I let AI generate this functions:
