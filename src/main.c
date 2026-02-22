@@ -4,6 +4,21 @@
 #include "fat12.h"
 #include "utils.h"
 
+void test(FAT12Info* fat12Info, const char* loopDevicePath) {
+	FAT12DirectoryEntry* dirEntries;
+	char* data;
+	uint32_t entriesCount;
+	entriesCount = getRootDirectoryEntries(&dirEntries, fat12Info, loopDevicePath);
+
+	for (uint32_t i = 0; i < entriesCount; i++) {
+		printf("name: %s\n", dirEntries[i].fileName);
+		printf("byte size: %d\n", dirEntries[i].fileSizeInBytes);
+		printFat12DirectoryEntry(dirEntries + i);
+		getFileContent((uint8_t**)&data, &dirEntries[i], fat12Info, loopDevicePath);
+		printf("%s\n", data);
+	}
+}
+
 int main(int argc, char** argv) {
 	if (argc != 2) {
 		printf("Invalid usage:\n");
@@ -30,6 +45,9 @@ int main(int argc, char** argv) {
 	char** fileNames = NULL;
 	uint32_t namesCount = getRootFileNames(&fileNames, fat12Info, loopDevicePath);
 	for (uint32_t i = 0; i < namesCount; i++) {
-		printf("%s\n", fileNames[i]);
+		printf("%d %s\n", i, fileNames[i]);
 	}
+
+	// printFileAllocationTable(fat12Info, loopDevicePath);
+	test(fat12Info, loopDevicePath);
 }

@@ -8,19 +8,19 @@
 
 char* fatFileNameToStr(char* filenameFatFormat) {
 	const uint32_t FILENAME_LENGTH = 8;
-	const uint32_t EXTENTION_LENGTH = 3;
+	const uint32_t EXTENSION_LENGTH = 3;
 
-	// Copying regularlly:
-	char* name = xmalloc(FILENAME_LENGTH + EXTENTION_LENGTH + 2);
+	// Copying:
+	char* name = xmalloc(FILENAME_LENGTH + EXTENSION_LENGTH + 2);
 	memcpy(name, filenameFatFormat, FILENAME_LENGTH);
 	if (filenameFatFormat[FILENAME_LENGTH] != ' ') {
 		name[FILENAME_LENGTH] = '.';
 	}
-	memcpy(name + FILENAME_LENGTH + 1, filenameFatFormat + FILENAME_LENGTH, EXTENTION_LENGTH);
+	memcpy(name + FILENAME_LENGTH + 1, filenameFatFormat + FILENAME_LENGTH, EXTENSION_LENGTH);
 
-	// Removing spacesu:
+	// Removing spaces:
 	uint32_t j = 0;
-	for (uint32_t i = 0; i < FILENAME_LENGTH + EXTENTION_LENGTH + 1; i++) {
+	for (uint32_t i = 0; i < FILENAME_LENGTH + EXTENSION_LENGTH + 1; i++) {
 		if (name[i] != ' ') {
 			name[j] = tolower(name[i]);
 			j++;

@@ -1,4 +1,6 @@
+#include <assert.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +38,7 @@ FAT12Info* loadFat12Info(FAT12Info* fat12Info, FAT12Header* fat12Header) {
 		info->totalSectors = fat12Header->totalSectors32;
 	}
 	info->bytesPerSector = fat12Header->bytesPerSector;
+	info->sectorsPerCluster = fat12Header->sectorsPerCluster;
 	info->fatSectorSize = fat12Header->tableSize16;
 	info->fatSectionSectorSize = fat12Header->tableCount * info->fatSectorSize;
 	info->rootDirSectorsSize = bytesToSectorsRoundUp(rootDirBytes, fat12Header->bytesPerSector);
@@ -51,25 +54,20 @@ FAT12Info* loadFat12Info(FAT12Info* fat12Info, FAT12Header* fat12Header) {
 	return info;
 }
 
-static inline bool isFinalDirectoryEntry(FAT12DirectoryEntry* entry) {
-	return entry->fileName[0] == FINAL_ENTRY;
-}
-static inline bool isVolumeLabelEntry(FAT12DirectoryEntry* entry) {
-	return entry->attributes & 0x08;
-}
-static inline bool isDeletedEntry(FAT12DirectoryEntry* entry) {
-	return ((uint8_t)entry->fileName[0] == DELETED_ENTRY);
-}
-uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, int maxEntries,
+uint32_t countValidEntries(FAT12DirectoryEntry* dirEntries, uint32_t maxEntries,
 						   bool includeNoneFileOrDirEntries) {
 	uint32_t count = 0;
 	for (uint32_t i = 0; i < maxEntries; i++) {
-		if (isFinalDirectoryEntry(&dirEntries[i])) break;  // End of the directory
+		if (isFinalDirectoryEntry(&dirEntries[i])) {
+			break;	// End of the directory
+		}
 		if (includeNoneFileOrDirEntries) {
 			count++;
 			continue;
 		}
-		if (!isDeletedEntry(&dirEntries[i]) && !isVolumeLabelEntry(&dirEntries[i])) count++;
+		if (!isDeletedEntry(&dirEntries[i]) && !isVolumeLabelEntry(&dirEntries[i])) {
+			count++;
+		}
 	}
 
 	return count;
@@ -108,12 +106,18 @@ uint32_t getEntriesFileNames(char*** fileNames, FAT12DirectoryEntry* dirEntries,
 	// Directories names are included in this count:
 	uint32_t fileTypeEntriesCount = countValidEntries(dirEntries, dirEntriesCount, false);
 
-	*fileNames = xmalloc(fileTypeEntriesCount * sizeof(char*));
+	*fileNames = (char**)xmalloc(fileTypeEntriesCount * sizeof(char*));
 	int nameIndex = 0;
 	for (uint32_t i = 0; i < dirEntriesCount; i++) {
-		if (isFinalDirectoryEntry(&dirEntries[i])) break;
-		if (isDeletedEntry(&dirEntries[i])) continue;
-		if (isVolumeLabelEntry(&dirEntries[i])) continue;
+		if (isFinalDirectoryEntry(&dirEntries[i])) {
+			break;
+		}
+		if (isDeletedEntry(&dirEntries[i])) {
+			continue;
+		}
+		if (isVolumeLabelEntry(&dirEntries[i])) {
+			continue;
+		}
 
 		char* val = fatFileNameToStr(dirEntries[i].fileName);
 		(*fileNames)[nameIndex] = val;
@@ -134,6 +138,142 @@ uint32_t getRootFileNames(char*** names, FAT12Info* fat12Info, const char* loopD
 	return fileNamesCount;
 }
 
+uint32_t filterValidDirectoryEntries(FAT12DirectoryEntry** dirEntries, uint32_t entriesCount) {
+	// Directories names are included in this count:
+	uint32_t fileTypeEntriesCount = countValidEntries(*dirEntries, entriesCount, false);
+
+	FAT12DirectoryEntry* filteredEntries =
+		xmalloc(fileTypeEntriesCount * sizeof(FAT12DirectoryEntry));
+	int validIndex = 0;
+	FAT12DirectoryEntry* currElement;
+	for (uint32_t i = 0; i < entriesCount; i++) {
+		currElement = &(*dirEntries)[i];
+		if (isFinalDirectoryEntry(currElement)) {
+			break;
+		}
+		if (isDeletedEntry(currElement)) {
+			continue;
+		}
+		if (isVolumeLabelEntry(currElement)) {
+			continue;
+		}
+
+		memcpy(&filteredEntries[validIndex], currElement, sizeof(FAT12DirectoryEntry));
+		validIndex++;
+	}
+	free(*dirEntries);
+	*dirEntries = filteredEntries;
+	return fileTypeEntriesCount;
+}
+
+uint32_t getFileContent(uint8_t** fileContent, FAT12DirectoryEntry* fileDirectoryEntry,
+						FAT12Info* fat12Info, const char* loopDevicePath) {
+	assert(fileDirectoryEntry->fileSizeInBytes != 0);
+	const uint32_t BYTES_PER_CLUSTER = fat12Info->bytesPerSector * fat12Info->sectorsPerCluster;
+
+	uint8_t* fat = getFat(fat12Info, loopDevicePath);
+	uint32_t fileClusterCount = countFileClusters(fileDirectoryEntry->firstClusterId, fat);
+	*fileContent = xmalloc((uint64_t)fileClusterCount * BYTES_PER_CLUSTER);
+	uint8_t* currFileContentPtr = *fileContent;
+
+	uint32_t currClusterId = fileDirectoryEntry->firstClusterId;
+	char* clusterData;
+	for (uint32_t i = 0; i < fileClusterCount; i++) {
+		readCluster(&clusterData, currClusterId, fat12Info, loopDevicePath);
+		memcpy(currFileContentPtr, clusterData, BYTES_PER_CLUSTER);
+		free(clusterData);
+
+		currFileContentPtr += BYTES_PER_CLUSTER;
+		currClusterId = getNextClusterId(currClusterId, fat);
+	}
+
+	return BYTES_PER_CLUSTER * fileClusterCount;
+}
+
+uint8_t* getFat(FAT12Info* fat12Info, const char* loopDevicePath) {
+	const uint32_t FAT12_TABLE_SIZE = fat12Info->fatSectorSize * fat12Info->bytesPerSector;
+
+	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
+	if (fat12FileDescriptor == -1) {
+		perror("Error opening loop device file");
+		exit(-1);
+	}
+
+	uint8_t* fat = xmalloc(FAT12_TABLE_SIZE);
+	uint32_t fatByteOffset = fat12Info->bytesPerSector * fat12Info->fatSectionSectorOffset;
+	if (pread(fat12FileDescriptor, fat, FAT12_TABLE_SIZE, fatByteOffset) == -1) {
+		perror("File failed to be read");
+		exit(-1);
+	}
+	close(fat12FileDescriptor);
+
+	return fat;
+}
+
+uint16_t getNextClusterId(uint16_t clusterId, const uint8_t* fat) {
+	uint32_t offset = clusterId + (clusterId / 2);
+	int packed = fat[offset] | (fat[offset + 1] << 8);
+
+	if (clusterId % 2) {
+		return packed >> 4;
+	}
+	return packed & 0x0FFF;
+}
+
+uint32_t countFileClusters(uint16_t initialClusterId, const uint8_t* fat) {
+	uint32_t clusterCount = 0;
+	uint16_t currClusterId = initialClusterId;
+	while (currClusterId != FAT_LAST_CLUSTER_NUM) {
+		clusterCount++;
+		currClusterId = getNextClusterId(currClusterId, fat);
+	}
+
+	return clusterCount;
+}
+
+void printFileAllocationTable(FAT12Info* fat12Info, const char* loopDevicePath) {
+	const uint32_t FAT12_TABLE_BYTES = fat12Info->fatSectorSize * fat12Info->bytesPerSector;
+	uint8_t* fat = getFat(fat12Info, loopDevicePath);
+
+	uint32_t maxEntries = (FAT12_TABLE_BYTES * 2) / 3;
+	for (int i = 0; i < maxEntries; i++) {
+		uint16_t pointerIndex = getNextClusterId(i, fat);
+
+		printf("%x -> %x\n", i, pointerIndex);
+	}
+}
+
+uint32_t readCluster(char** data, uint16_t clusterId, FAT12Info* fat12Info,
+					 const char* loopDevicePath) {
+	uint32_t clusterNum = clusterIdToClusterNum(clusterId);
+	uint32_t bytesPerCluster = fat12Info->sectorsPerCluster * fat12Info->bytesPerSector;
+	uint32_t dataSectionSectorOffset = clusterNum * fat12Info->sectorsPerCluster;
+	uint32_t deviceSectorOffset = fat12Info->dataSectionSectorOffset + dataSectionSectorOffset;
+	uint32_t deviceBytesOffset = deviceSectorOffset * fat12Info->bytesPerSector;
+	*data = xmalloc(bytesPerCluster);
+
+	int fat12FileDescriptor = open(loopDevicePath, O_RDONLY);
+	if (fat12FileDescriptor == -1) {
+		perror("Error opening loop device file");
+		exit(-1);
+	}
+
+	if (pread(fat12FileDescriptor, *data, bytesPerCluster, deviceBytesOffset) == -1) {
+		perror("File failed to be read");
+		exit(-1);
+	}
+	close(fat12FileDescriptor);
+	return bytesPerCluster;
+}
+uint32_t getRootDirectoryEntries(FAT12DirectoryEntry** dirEntries, FAT12Info* fat12Info,
+								 const char* loopDevicePath) {
+	uint32_t entriesCount = getDirectoryEntries(dirEntries, fat12Info->rootDirSectorOffset,
+												fat12Info->rootDirSectorsSize,
+												fat12Info->bytesPerSector, loopDevicePath);
+	return filterValidDirectoryEntries(dirEntries, entriesCount);
+}
+
+// NOLINTBEGIN
 void printFat12Header(const FAT12Header* fat12Header) {
 	if (fat12Header == NULL) {
 		printf("Error: FAT12Header pointer is NULL\n");
@@ -212,3 +352,72 @@ void printFat12Info(const FAT12Info* fat12Info) {
 	printf("================================================\n");
 	printf("\n");
 }
+
+void printFat12DirectoryEntry(const FAT12DirectoryEntry* e) {
+	if (!e) {
+		printf("Error: FAT12DirectoryEntry pointer is NULL\n");
+		return;
+	}
+
+	printf("========== FAT12 Directory Entry ==========\n");
+
+	printf("Raw 8.3 Name:           '%.11s'\n", e->fileName);
+	printf("Attributes:             0x%02X\n", e->attributes);
+	printf("Reserved:               0x%02X\n", e->reserved);
+
+	// Decode FAT time/date (optional but useful)
+	{
+		uint16_t t = e->creationTime;
+		uint16_t d = e->creationDate;
+		unsigned sec = (t & 0x1F) * 2;
+		unsigned min = (t >> 5) & 0x3F;
+		unsigned hour = (t >> 11) & 0x1F;
+		unsigned day = d & 0x1F;
+		unsigned mon = (d >> 5) & 0x0F;
+		unsigned year = 1980 + ((d >> 9) & 0x7F);
+
+		printf("Creation Time (raw):    0x%04X\n", e->creationTime);
+		printf("Creation Date (raw):    0x%04X\n", e->creationDate);
+		printf("Created (decoded):      %04u-%02u-%02u %02u:%02u:%02u +%u cs\n", year, mon, day,
+			   hour, min, sec, (unsigned)e->creationTimeCentiseconds);
+	}
+
+	{
+		uint16_t d = e->lastAccessDate;
+		unsigned day = d & 0x1F;
+		unsigned mon = (d >> 5) & 0x0F;
+		unsigned year = 1980 + ((d >> 9) & 0x7F);
+
+		printf("Last Access Date (raw): 0x%04X\n", e->lastAccessDate);
+		printf("Last Access (decoded):  %04u-%02u-%02u\n", year, mon, day);
+	}
+
+	{
+		uint16_t t = e->lastModifyTime;
+		uint16_t d = e->lastModifyDate;
+		unsigned sec = (t & 0x1F) * 2;
+		unsigned min = (t >> 5) & 0x3F;
+		unsigned hour = (t >> 11) & 0x1F;
+		unsigned day = d & 0x1F;
+		unsigned mon = (d >> 5) & 0x0F;
+		unsigned year = 1980 + ((d >> 9) & 0x7F);
+
+		printf("Last Modify Time (raw): 0x%04X\n", e->lastModifyTime);
+		printf("Last Modify Date (raw): 0x%04X\n", e->lastModifyDate);
+		printf("Last Modified(decoded): %04u-%02u-%02u %02u:%02u:%02u\n", year, mon, day, hour, min,
+			   sec);
+	}
+
+	printf("zeroValue:              0x%04X\n", e->zeroValue);
+	printf("First Cluster:          %u (0x%04X)\n", e->firstClusterId, e->firstClusterId);
+	printf("File Size:              %u bytes (0x%08X)\n", e->fileSizeInBytes, e->fileSizeInBytes);
+
+	// A couple common entry markers to help debugging dumps
+	printf("Entry marker:           0x%02X (fileName[0])\n", (unsigned char)e->fileName[0]);
+	if ((unsigned char)e->fileName[0] == 0x00) printf("  -> End of directory\n");
+	if ((unsigned char)e->fileName[0] == 0xE5) printf("  -> Deleted entry\n");
+	if (e->attributes == 0x0F) printf("  -> Long File Name (LFN) entry\n");
+
+	printf("================================================\n\n");
+}
+// NOLINTEND
