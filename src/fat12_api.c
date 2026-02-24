@@ -88,6 +88,10 @@ uint32_t getFileContentByPath(uint8_t** fileContent, const char* path) {
 }
 
 uint32_t getFileNamesByPath(char*** filesNames, const char* path) {
+	if (strlen(path) == 1 && strcmp(path, "/") == 0) {
+		return getRootFileNames(filesNames, &fat12Info, fat12LoopDevicePath);
+	}
+
 	FAT12DirectoryEntry* finalEntry = getPathFinalDirectoryEntry(path);
 	if (!finalEntry) {
 		(void)fprintf(stderr, "Directory does not exist: %s\n", path);

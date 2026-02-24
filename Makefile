@@ -19,7 +19,7 @@ CFLAGS := -MMD -MP -Werror -Wall -Werror -g
 LDFLAGS := -lm
 
 run: build $(FAT12_BIN)
-	./$(TARGET) $(FAT12_BIN)
+	./$(TARGET) $(FAT12_BIN) ls /
 debug: build $(FAT12_BIN)
 	gdb $(TARGET)
 build: $(TARGET)
