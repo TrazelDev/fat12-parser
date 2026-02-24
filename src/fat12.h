@@ -111,6 +111,22 @@ FAT12Info* loadFat12Info(FAT12Info* fat12Info, FAT12Header* fat12Header);
  */
 uint32_t getRootFileNames(char*** names, FAT12Info* fat12Info, const char* loopDevicePath);
 
+/**
+ * @brief Gets file names from an array of FAT12 directory entries.
+ * This function extracts file names from the provided directory entries and stores them in a
+ * dynamically allocated array of strings.
+ *
+ * @param[out] fileNames Address of a char** variable. The function will allocate memory for the
+ * array and for each file name string. The caller is responsible for freeing each string in the
+ * array and then the array itself.
+ * @param[in] dirEntries Pointer to an array of FAT12DirectoryEntry structures.
+ * @param[in] dirEntriesCount Number of directory entries in the dirEntries array.
+ *
+ * @return The count of file names stored in the fileNames variable.
+ */
+uint32_t getEntriesFileNames(char*** fileNames, FAT12DirectoryEntry* dirEntries,
+							 uint32_t dirEntriesCount);
+
 /** Extracts fat12 directory entries of specific directory from the loopDevice provided.
  * This entries include:
  * directories, files, deleted entries, long file name entries and volume label entries.

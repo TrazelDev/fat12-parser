@@ -15,4 +15,14 @@ int main(int argc, char** argv) {
 	initFat12Api(loopDevicePath);
 	getFileContentByPath((uint8_t**)&fileContent, "/temp/files/file.txt");
 	printf("%s", fileContent);
+	free(fileContent);
+
+	char** names;
+	uint32_t nameCount = getFileNamesByPath(&names, "/temp");
+	for (uint32_t i = 0; i < nameCount; i++) {
+		printf("%s\n", names[i]);
+		free(names[i]);
+	}
+
+	free((void*)names);
 }
